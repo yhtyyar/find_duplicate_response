@@ -1,3 +1,115 @@
+# HTTP Request Log Duplicate Finder
+
+[![Python](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+This application finds duplicate entries in CSV files of HTTP request logs based on URL, HTTP method, response code, and status.
+
+## 🇷🇺 Русская версия ниже
+
+## Features
+
+- Read CSV files with HTTP request logs
+- Identify duplicate records based on URL, HTTP method, response code, and status
+- Color-coded visualization for better readability (CLI)
+- REST API for programmatic access
+- Enhanced visual grouping of duplicates
+- Special highlighting for error codes (4xx and 5xx)
+- Improved color scheme for better readability
+- **Query parameter consideration when comparing URLs** - requests with different parameters are considered different
+
+## Project Structure
+
+- `model.py` - Data processing logic
+- `view.py` - Display functions
+- `controller.py` - Main application logic (CLI)
+- `api.py` - REST API implementation
+- `res/` - Sample data files
+
+## Requirements
+
+- Python 3.7+
+- Flask
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Command Line
+
+```bash
+# Run with default file
+python controller.py
+
+# Run with specific file
+python controller.py path/to/your/file.csv
+```
+
+### REST API
+
+```bash
+# Start API server
+python api.py
+
+# API will be available at http://localhost:5000
+
+# Health check
+curl http://localhost:5000/health
+
+# Find duplicates
+curl -X POST -F "file=@path/to/your/file.csv" http://localhost:5000/find-duplicates
+```
+
+## How It Works
+
+1. The application reads CSV files with HTTP request logs
+2. Identifies duplicate records based on the combination:
+   - URL (including query parameters)
+   - HTTP Method (GET, POST, etc.)
+   - Response Code (200, 404, etc.)
+   - Status (COMPLETE, ERROR, etc.)
+
+### URL Processing Features
+
+When comparing URLs, the application considers query parameters:
+- `https://example.com/api?user=1&event=play` and `https://example.com/api?user=1&event=play` - duplicates
+- `https://example.com/api?user=1&event=play` and `https://example.com/api?user=2&event=play` - different requests
+- `https://example.com/api?user=1&event=play` and `https://example.com/api?event=play&user=1` - different requests (different parameter order)
+
+## Output
+
+The application displays:
+- Total number of processed rows
+- Number of duplicates found
+- Detailed list of duplicate records with visual grouping
+
+## API Endpoints
+
+- `GET /health` - Service health check
+- `POST /find-duplicates` - Find duplicates in uploaded CSV file
+- `GET /` - Simple HTML interface for testing
+
+The POST `/find-duplicates` endpoint expects a multipart/form-data request with a 'file' field containing the CSV file.
+
+## Color Coding
+
+- **Green**: Successful responses (2xx)
+- **Yellow**: Redirect responses (3xx)
+- **Red**: Client errors (4xx)
+- **Purple**: Server errors (5xx)
+- **Blue/Other colors**: Different duplicate groups for easy visual identification
+
+CLI version uses a light color scheme for better readability.
+
+## Deployment
+
+See [deployment.md](deployment.md) for detailed deployment instructions.
+
+---
+
 # Поиск дубликатов в логах HTTP запросов
 
 Это приложение находит дублирующиеся записи в CSV файлах логов HTTP запросов на основе URL, метода HTTP, кода ответа и статуса.
