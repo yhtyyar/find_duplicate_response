@@ -1,12 +1,1 @@
-# Требования для приложения поиска дубликатов в логах
-
-Этот проект использует стандартные библиотеки Python и Flask:
-- csv
-- argparse
-- logging
-- os
-- sys
-- flask
-
-Установка зависимостей:
-pip install -r requirements.txt
+flask
