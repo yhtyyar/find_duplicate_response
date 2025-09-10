@@ -2,11 +2,15 @@
 
 import io
 import logging
+import argparse
+import os
+import sys
 from typing import Dict, Any, List
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, status, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 from model import read_csv_from_string, find_duplicates, get_stats, _create_comparison_key
 
@@ -17,10 +21,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# API Version
+API_VERSION = "v1"
+
+# Create API router with version prefix
+api_router = APIRouter(prefix=f"/{API_VERSION}/api")
+
 # Create FastAPI app instance
 app = FastAPI(
     title="Duplicate Log Finder API",
-    description="API for finding duplicates in HTTP logs",
+    description="API for finding duplicates in HTTP logs with versioning support",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -37,7 +47,7 @@ app.add_middleware(
 )
 
 
-@app.get("/health", tags=["Health"])
+@api_router.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, str]:
     """
     Check service status.
@@ -48,7 +58,7 @@ async def health_check() -> Dict[str, str]:
     return {"status": "healthy"}
 
 
-@app.post("/find-duplicates", 
+@api_router.post("/find-duplicates", 
           tags=["Processing"],
           summary="Find duplicates in CSV file",
           description="Uploads a CSV file and finds duplicate records based on URL, method, response code, and status.")
@@ -133,41 +143,41 @@ async def index() -> HTMLResponse:
     Returns:
         HTMLResponse: HTML page with interface
     """
-    html_content = """
+    html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <title>HTTP Request Log Duplicate Finder</title>
     <style>
-        body { 
+        body {{ 
             font-family: Arial, sans-serif; 
             margin: 40px; 
             background-color: #f5f5f5;
             color: #333;
-        }
-        .container { 
+        }}
+        .container {{ 
             max-width: 1200px; 
             margin: 0 auto; 
             background-color: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 { 
+        }}
+        h1 {{ 
             color: #333; 
             border-bottom: 2px solid #eee;
             padding-bottom: 10px;
-        }
-        .form-group { 
+        }}
+        .form-group {{ 
             margin-bottom: 20px; 
-        }
-        input[type="file"] { 
+        }}
+        input[type="file"] {{ 
             margin-bottom: 10px; 
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
-        }
-        button { 
+        }}
+        button {{ 
             background-color: #4CAF50; 
             color: white; 
             padding: 12px 24px; 
@@ -175,70 +185,72 @@ async def index() -> HTMLResponse:
             cursor: pointer; 
             border-radius: 4px;
             font-size: 16px;
-        }
-        button:hover { 
+        }}
+        button:hover {{ 
             background-color: #45a049; 
-        }
-        #result { 
+        }}
+        #result {{ 
             margin-top: 20px; 
             padding: 15px; 
             border-radius: 4px;
             background-color: #f9f9f9;
             display: none;
             overflow-x: auto;
-        }
-        .error { 
+        }}
+        .error {{ 
             background-color: #ffebee; 
             color: #c62828;
             border-left: 4px solid #f44336;
-        }
-        .success { 
+        }}
+        .success {{ 
             background-color: #e8f5e9; 
             color: #2e7d32;
             border-left: 4px solid #4CAF50;
-        }
-        .warning { 
+        }}
+        .warning {{ 
             background-color: #fff3e0; 
             color: #ef6c00;
             border-left: 4px solid #ff9800;
-        }
-        .duplicate-group {
+        }}
+        .duplicate-group {{
             margin-bottom: 15px;
             padding: 10px;
             border-radius: 4px;
-        }
-        .duplicate-group-0 { background-color: #e3f2fd; } /* Light blue */
-        .duplicate-group-1 { background-color: #e8f5e8; } /* Light green */
-        .duplicate-group-2 { background-color: #fff8e1; } /* Light yellow */
-        .duplicate-group-3 { background-color: #f3e5f5; } /* Light purple */
-        .duplicate-group-4 { background-color: #e0f7fa; } /* Light cyan */
-        .duplicate-group-5 { background-color: #ffebee; } /* Light red */
-        .duplicate-group-6 { background-color: #fafafa; } /* Light gray */
-        .duplicate-group-7 { background-color: #fff3e0; } /* Light orange */
+        }}
+        .duplicate-group-0 {{ background-color: #e3f2fd; }} /* Light blue */
+        .duplicate-group-1 {{ background-color: #e8f5e8; }} /* Light green */
+        .duplicate-group-2 {{ background-color: #fff8e1; }} /* Light yellow */
+        .duplicate-group-3 {{ background-color: #f3e5f5; }} /* Light purple */
+        .duplicate-group-4 {{ background-color: #e0f7fa; }} /* Light cyan */
+        .duplicate-group-5 {{ background-color: #ffebee; }} /* Light red */
+        .duplicate-group-6 {{ background-color: #fafafa; }} /* Light gray */
+        .duplicate-group-7 {{ background-color: #fff3e0; }} /* Light orange */
         
-        .error-4xx { background-color: #ffebee; border-left: 4px solid #f44336; }
-        .error-5xx { background-color: #f3e5f5; border-left: 4px solid #9c27b0; }
+        .error-4xx {{ background-color: #ffebee; border-left: 4px solid #f44336; }}
+        .error-5xx {{ background-color: #f3e5f5; border-left: 4px solid #9c27b0; }}
         
-        table {
+        table {{
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
-        }
-        th, td {
+        }}
+        th, td {{
             padding: 8px 12px;
             text-align: left;
             border-bottom: 1px solid #ddd;
-        }
-        th {
+        }}
+        th {{
             background-color: #f5f5f5;
-        }
-        .error-code-4xx { color: #f44336; font-weight: bold; }
-        .error-code-5xx { color: #9c27b0; font-weight: bold; }
+        }}
+        .error-code-4xx {{ color: #f44336; font-weight: bold; }}
+        .error-code-5xx {{ color: #9c27b0; font-weight: bold; }}
     </style>
 </head>
 <body>
     <div class="container">
         <h1>HTTP Request Log Duplicate Finder</h1>
+        <p>API Version: {API_VERSION}</p>
+        <p>API Endpoint: /{API_VERSION}/api/find-duplicates</p>
         <form id="uploadForm" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="csvFile">Upload CSV file:</label><br>
@@ -250,85 +262,85 @@ async def index() -> HTMLResponse:
     </div>
 
     <script>
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {{
             e.preventDefault();
             
             const formData = new FormData();
             const fileInput = document.getElementById('csvFile');
             const resultDiv = document.getElementById('result');
             
-            if (fileInput.files.length === 0) {
+            if (fileInput.files.length === 0) {{
                 showResult('Please select a file', 'error');
                 return;
-            }
+            }}
             
             formData.append('file', fileInput.files[0]);
             
             // Show loading message
             showResult('Processing... Please wait.', 'warning');
             
-            fetch('/find-duplicates', {
+            fetch('/{API_VERSION}/api/find-duplicates', {{
                 method: 'POST',
                 body: formData
-            })
+            }})
             .then(response => response.json())
-            .then(data => {
-                if (data.detail) {
+            .then(data => {{
+                if (data.detail) {{
                     showResult('Error: ' + data.detail, 'error');
-                } else {
+                }} else {{
                     showResult(formatResult(data), 'success');
-                }
-            })
-            .catch(error => {
+                }}
+            }})
+            .catch(error => {{
                 showResult('Network error: ' + error, 'error');
-            });
-        });
+            }});
+        }});
         
-        function showResult(message, type) {
+        function showResult(message, type) {{
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = '<pre>' + message + '</pre>';
             resultDiv.className = type;
             resultDiv.style.display = 'block';
-        }
+        }}
         
-        function formatResult(data) {
+        function formatResult(data) {{
             let result = '=== Processing statistics ===\\n';
             result += 'Processed rows: ' + data.total_rows + '\\n';
             result += 'Duplicates found: ' + data.duplicates_count + '\\n';
             result += 'Duplicate groups: ' + data.duplicate_groups + '\\n\\n';
             
-            if (data.duplicates_count > 0) {
+            if (data.duplicates_count > 0) {{
                 result += '=== Duplicate rows ===\\n';
                 result += 'Response code | Start time                | Method  | URL\\n';
                 result += '-'.repeat(200) + '\\n';
                 
                 let groupIndex = 0;
-                for (const [key, rows] of Object.entries(data.duplicates)) {
-                    for (const row of rows) {
+                for (const [key, rows] of Object.entries(data.duplicates)) {{
+                    for (const row of rows) {{
                         const code = row['Response Code'] || '';
                         let codeDisplay = code;
                         
                         // Add special formatting for error codes
-                        if (code.startsWith('4')) {
+                        if (code.startsWith('4')) {{
                             codeDisplay = code + ' [4xx Error]';
-                        } else if (code.startsWith('5')) {
+                        }} else if (code.startsWith('5')) {{
                             codeDisplay = code + ' [5xx Error]';
-                        }
+                        }}
                         
                         result += 
                             codeDisplay.padEnd(15) + ' | ' +
                             (row['Request Start Time'] || '').substring(0, 25).padEnd(25) + ' | ' +
                             (row['Method'] || '').padEnd(7) + ' | ' +
                             (row['URL'] || '').substring(0, 150) + '\\n';
-                    }
+                    }}
                     result += '\\n'; // Separate groups with empty line
                     groupIndex = (groupIndex + 1) % 8;
-                }
+                }}
                 result += '\\n';
-            }
+            }}
             
             return result;
-        }
+        }}
     </script>
 </body>
 </html>
@@ -336,12 +348,27 @@ async def index() -> HTMLResponse:
     return HTMLResponse(content=html_content, status_code=200)
 
 
-if __name__ == "__main__":
-    import uvicorn
+# Include the API router
+app.include_router(api_router)
+
+
+def main():
+    """Main entry point for running the API server."""
+    parser = argparse.ArgumentParser(description="Run the Duplicate Log Finder API")
+    parser.add_argument("--host", default="194.35.48.118", help="Host to bind the server to")
+    parser.add_argument("--port", type=int, default=8080, help="Port to bind the server to")
+    args = parser.parse_args()
+    
+    logger.info(f"Starting server on {args.host}:{args.port}")
+    
     uvicorn.run(
         "api:app",
-        host="0.0.0.0",
-        port=5000,
+        host=args.host,
+        port=args.port,
         log_level="info",
         reload=False  # Disable reload in production
     )
+
+
+if __name__ == "__main__":
+    main()
