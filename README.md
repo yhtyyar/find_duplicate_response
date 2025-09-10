@@ -12,24 +12,27 @@ This application finds duplicate entries in CSV files of HTTP request logs based
 - Read CSV files with HTTP request logs
 - Identify duplicate records based on URL, HTTP method, response code, and status
 - Color-coded visualization for better readability (CLI)
-- REST API for programmatic access
+- REST API for programmatic access (using FastAPI)
 - Enhanced visual grouping of duplicates
 - Special highlighting for error codes (4xx and 5xx)
 - Improved color scheme for better readability
 - **Query parameter consideration when comparing URLs** - requests with different parameters are considered different
+- Interactive API documentation with Swagger UI
 
 ## Project Structure
 
 - `model.py` - Data processing logic
 - `view.py` - Display functions
 - `controller.py` - Main application logic (CLI)
-- `api.py` - REST API implementation
+- `api.py` - REST API implementation (using FastAPI)
 - `res/` - Sample data files
 
 ## Requirements
 
 - Python 3.7+
-- Flask
+- FastAPI
+- Uvicorn
+- python-multipart
 
 Install dependencies:
 ```bash
@@ -61,6 +64,9 @@ curl http://localhost:5000/health
 
 # Find duplicates
 curl -X POST -F "file=@path/to/your/file.csv" http://localhost:5000/find-duplicates
+
+# Interactive API documentation
+# Open http://localhost:5000/docs in your browser
 ```
 
 ## How It Works
@@ -91,6 +97,8 @@ The application displays:
 - `GET /health` - Service health check
 - `POST /find-duplicates` - Find duplicates in uploaded CSV file
 - `GET /` - Simple HTML interface for testing
+- `GET /docs` - Interactive API documentation (Swagger UI)
+- `GET /redoc` - Alternative API documentation (ReDoc)
 
 The POST `/find-duplicates` endpoint expects a multipart/form-data request with a 'file' field containing the CSV file.
 
@@ -119,7 +127,7 @@ See [deployment.md](deployment.md) for detailed deployment instructions.
 - `model.py` - Логика обработки данных
 - `view.py` - Функции отображения
 - `controller.py` - Основная логика приложения (CLI)
-- `api.py` - Реализация REST API
+- `api.py` - Реализация REST API (с использованием FastAPI)
 - `res/` - Примеры файлов данных
 
 ## Возможности
@@ -127,11 +135,12 @@ See [deployment.md](deployment.md) for detailed deployment instructions.
 - Чтение CSV файлов с логами HTTP запросов
 - Определение дублирующихся записей на основе URL, метода, кода ответа и статуса
 - Цветная индикация для лучшей визуализации (CLI)
-- REST API для программного доступа
+- REST API для программного доступа (с использованием FastAPI)
 - Улучшенная визуальная группировка дубликатов
 - Специальная подсветка для кодов ошибок (4xx и 5xx)
 - Улучшенная цветовая схема для лучшей читаемости
 - **Учет query-параметров при сравнении URL** - запросы с разными параметрами считаются разными
+- Интерактивная документация API с Swagger UI
 
 ## Использование
 
@@ -158,12 +167,17 @@ curl http://localhost:5000/health
 
 # Поиск дубликатов
 curl -X POST -F "file=@path/to/your/file.csv" http://localhost:5000/find-duplicates
+
+# Интерактивная документация API
+# Откройте http://localhost:5000/docs в вашем браузере
 ```
 
 ## Требования
 
 - Python 3.x
-- Flask
+- FastAPI
+- Uvicorn
+- python-multipart
 
 Установка зависимостей:
 ```bash
@@ -198,15 +212,21 @@ pip install -r requirements.txt
 - `GET /health` - Проверка состояния сервиса
 - `POST /find-duplicates` - Поиск дубликатов в загруженном CSV файле
 - `GET /` - Простой HTML интерфейс для тестирования
+- `GET /docs` - Интерактивная документация API (Swagger UI)
+- `GET /redoc` - Альтернативная документация API (ReDoc)
 
 Конечная точка POST `/find-duplicates` ожидает multipart/form-data запрос с полем 'file', содержащим CSV файл.
 
-## Цветовая кодировка
+## Цветовая индикация
 
 - **Зеленый**: Успешные ответы (2xx)
-- **Желтый**: Ответы с перенаправлением (3xx)
-- **Красный**: Ошибки клиента (4xx)
-- **Пурпурный**: Ошибки сервера (5xx)
-- **Синий/Другие цвета**: Разные группы дубликатов для легкой визуальной идентификации
+- **Желтый**: Перенаправления (3xx)
+- **Красный**: Клиентские ошибки (4xx)
+- **Фиолетовый**: Серверные ошибки (5xx)
+- **Синий/Другие цвета**: Разные группы дубликатов для удобной визуальной идентификации
 
 CLI версия использует светлую цветовую схему для лучшей читаемости.
+
+## Развертывание
+
+См. [deployment.md](deployment.md) для подробных инструкций по развертыванию.

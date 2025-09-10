@@ -1,102 +1,143 @@
-"""
-REST API для приложения поиска дубликатов.
-"""
+"""REST API for the duplicate finder application."""
 
 import io
 import logging
-from flask import Flask, request, jsonify, render_template_string
-import model
+from typing import Dict, Any, List
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
+from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from model import read_csv_from_string, find_duplicates, get_stats, _create_comparison_key
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Create FastAPI app instance
+app = FastAPI(
+    title="Duplicate Log Finder API",
+    description="API for finding duplicates in HTTP logs",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
+
+# Add CORS middleware for remote access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Проверка состояния сервиса."""
-    return jsonify({"status": "healthy"}), 200
-
-
-@app.route('/find-duplicates', methods=['POST'])
-def find_duplicates():
+@app.get("/health", tags=["Health"])
+async def health_check() -> Dict[str, str]:
     """
-    Поиск дубликатов в загруженном CSV файле.
+    Check service status.
     
-    Ожидаемый вход:
-    - multipart/form-data с полем 'file', содержащим CSV файл
-    
-    Возвращает:
-    - JSON ответ с результатами обработки
+    Returns:
+        Dict[str, str]: Service status
     """
-    # Проверка наличия файла
-    if 'file' not in request.files:
-        return jsonify({"error": "Файл не предоставлен"}), 400
+    return {"status": "healthy"}
+
+
+@app.post("/find-duplicates", 
+          tags=["Processing"],
+          summary="Find duplicates in CSV file",
+          description="Uploads a CSV file and finds duplicate records based on URL, method, response code, and status.")
+async def find_duplicates_endpoint(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """
+    Find duplicates in uploaded CSV file.
     
-    file = request.files['file']
-    
-    # Проверка имени файла
-    if file.filename == '':
-        return jsonify({"error": "Пустое имя файла"}), 400
-    
-    try:
-        # Чтение содержимого файла
-        content = file.read().decode('utf-8')
+    Args:
+        file (UploadFile): Uploaded CSV file
         
-        # Использование StringIO для работы со строкой как с файлом
+    Returns:
+        Dict[str, Any]: Processing results
+        
+    Raises:
+        HTTPException: When file processing fails
+    """
+    try:
+        # Read file content
+        content = (await file.read()).decode('utf-8')
+        
+        # Use StringIO to work with string as file
         csv_file = io.StringIO(content)
         
-        # Обработка CSV данных
-        rows = model.read_csv_from_string(csv_file)
+        # Process CSV data
+        rows = read_csv_from_string(csv_file)
         
-        # Проверка на пустые данные
+        # Check for empty data
         if not rows:
-            return jsonify({"error": "Файл пуст"}), 400
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File is empty"
+            )
 
         total = len(rows)
-        duplicates_info = model.find_duplicates(rows)
-        stats = model.get_stats(rows)
+        duplicates_info = find_duplicates(rows)
+        stats = get_stats(rows)
         duplicates_count = sum(v - 1 for v in duplicates_info.values())
 
-        # Группировка дублирующихся строк
-        duplicates_full = {}
+        # Group duplicate rows
+        duplicates_full: Dict[str, List[Dict[str, Any]]] = {}
         for row in rows:
-            # Используем ту же функцию создания ключа, что и в модели, для правильной группировки
-            key = model._create_comparison_key(row)
+            # Use the same key creation function as in the model for proper grouping
+            key = _create_comparison_key(row)
             if key in duplicates_info:
                 if key not in duplicates_full:
                     duplicates_full[key] = []
                 duplicates_full[key].append(row)
 
-        # Подготовка ответа с информацией о группах дубликатов
+        # Prepare response with duplicate group information
         result = {
             "total_rows": total,
             "duplicates_count": duplicates_count,
             "duplicates": duplicates_full,
             "statistics": stats,
-            "duplicate_groups": len(duplicates_full)  # Количество различных групп дубликатов
+            "duplicate_groups": len(duplicates_full)  # Number of different duplicate groups
         }
         
-        return jsonify(result), 200
+        return result
         
     except ValueError as e:
-        logger.error(f"Ошибка данных: {str(e)}")
-        return jsonify({"error": f"Ошибка данных: {str(e)}"}), 400
+        logger.error(f"Data error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Data error: {str(e)}"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        logger.error(f"Неожиданная ошибка: {str(e)}")
-        return jsonify({"error": f"Неожиданная ошибка: {str(e)}"}), 500
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {str(e)}"
+        )
 
 
-@app.route('/', methods=['GET'])
-def index():
-    """Простой HTML интерфейс для тестирования API."""
-    return render_template_string("""
+@app.get("/", response_class=HTMLResponse, tags=["UI"])
+async def index() -> HTMLResponse:
+    """
+    Simple HTML interface for testing the API.
+    
+    Returns:
+        HTMLResponse: HTML page with interface
+    """
+    html_content = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Поиск дубликатов в логах</title>
+    <title>HTTP Request Log Duplicate Finder</title>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -166,14 +207,14 @@ def index():
             padding: 10px;
             border-radius: 4px;
         }
-        .duplicate-group-0 { background-color: #e3f2fd; } /* Светло-синий */
-        .duplicate-group-1 { background-color: #e8f5e8; } /* Светло-зеленый */
-        .duplicate-group-2 { background-color: #fff8e1; } /* Светло-желтый */
-        .duplicate-group-3 { background-color: #f3e5f5; } /* Светло-фиолетовый */
-        .duplicate-group-4 { background-color: #e0f7fa; } /* Светло-голубой */
-        .duplicate-group-5 { background-color: #ffebee; } /* Светло-красный */
-        .duplicate-group-6 { background-color: #fafafa; } /* Светло-серый */
-        .duplicate-group-7 { background-color: #fff3e0; } /* Светло-оранжевый */
+        .duplicate-group-0 { background-color: #e3f2fd; } /* Light blue */
+        .duplicate-group-1 { background-color: #e8f5e8; } /* Light green */
+        .duplicate-group-2 { background-color: #fff8e1; } /* Light yellow */
+        .duplicate-group-3 { background-color: #f3e5f5; } /* Light purple */
+        .duplicate-group-4 { background-color: #e0f7fa; } /* Light cyan */
+        .duplicate-group-5 { background-color: #ffebee; } /* Light red */
+        .duplicate-group-6 { background-color: #fafafa; } /* Light gray */
+        .duplicate-group-7 { background-color: #fff3e0; } /* Light orange */
         
         .error-4xx { background-color: #ffebee; border-left: 4px solid #f44336; }
         .error-5xx { background-color: #f3e5f5; border-left: 4px solid #9c27b0; }
@@ -197,13 +238,13 @@ def index():
 </head>
 <body>
     <div class="container">
-        <h1>Поиск дубликатов в логах HTTP запросов</h1>
+        <h1>HTTP Request Log Duplicate Finder</h1>
         <form id="uploadForm" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="csvFile">Загрузить CSV файл:</label><br>
+                <label for="csvFile">Upload CSV file:</label><br>
                 <input type="file" id="csvFile" name="file" accept=".csv" required>
             </div>
-            <button type="submit">Найти дубликаты</button>
+            <button type="submit">Find Duplicates</button>
         </form>
         <div id="result"></div>
     </div>
@@ -217,14 +258,14 @@ def index():
             const resultDiv = document.getElementById('result');
             
             if (fileInput.files.length === 0) {
-                showResult('Пожалуйста, выберите файл', 'error');
+                showResult('Please select a file', 'error');
                 return;
             }
             
             formData.append('file', fileInput.files[0]);
             
-            // Показ сообщения о загрузке
-            showResult('Обработка... Пожалуйста, подождите.', 'warning');
+            // Show loading message
+            showResult('Processing... Please wait.', 'warning');
             
             fetch('/find-duplicates', {
                 method: 'POST',
@@ -232,14 +273,14 @@ def index():
             })
             .then(response => response.json())
             .then(data => {
-                if (data.error) {
-                    showResult('Ошибка: ' + data.error, 'error');
+                if (data.detail) {
+                    showResult('Error: ' + data.detail, 'error');
                 } else {
                     showResult(formatResult(data), 'success');
                 }
             })
             .catch(error => {
-                showResult('Ошибка сети: ' + error, 'error');
+                showResult('Network error: ' + error, 'error');
             });
         });
         
@@ -251,14 +292,14 @@ def index():
         }
         
         function formatResult(data) {
-            let result = '=== Статистика обработки ===\\n';
-            result += 'Обработано строк: ' + data.total_rows + '\\n';
-            result += 'Найдено дубликатов: ' + data.duplicates_count + '\\n';
-            result += 'Групп дубликатов: ' + data.duplicate_groups + '\\n\\n';
+            let result = '=== Processing statistics ===\\n';
+            result += 'Processed rows: ' + data.total_rows + '\\n';
+            result += 'Duplicates found: ' + data.duplicates_count + '\\n';
+            result += 'Duplicate groups: ' + data.duplicate_groups + '\\n\\n';
             
             if (data.duplicates_count > 0) {
-                result += '=== Дублирующиеся строки ===\\n';
-                result += 'Код ответа    | Время начала              | Метод   | URL\\n';
+                result += '=== Duplicate rows ===\\n';
+                result += 'Response code | Start time                | Method  | URL\\n';
                 result += '-'.repeat(200) + '\\n';
                 
                 let groupIndex = 0;
@@ -267,11 +308,11 @@ def index():
                         const code = row['Response Code'] || '';
                         let codeDisplay = code;
                         
-                        // Добавление специального форматирования для кодов ошибок
+                        // Add special formatting for error codes
                         if (code.startsWith('4')) {
-                            codeDisplay = code + ' [Ошибка 4xx]';
+                            codeDisplay = code + ' [4xx Error]';
                         } else if (code.startsWith('5')) {
-                            codeDisplay = code + ' [Ошибка 5xx]';
+                            codeDisplay = code + ' [5xx Error]';
                         }
                         
                         result += 
@@ -280,7 +321,7 @@ def index():
                             (row['Method'] || '').padEnd(7) + ' | ' +
                             (row['URL'] || '').substring(0, 150) + '\\n';
                     }
-                    result += '\\n'; // Разделение групп пустой строкой
+                    result += '\\n'; // Separate groups with empty line
                     groupIndex = (groupIndex + 1) % 8;
                 }
                 result += '\\n';
@@ -291,8 +332,16 @@ def index():
     </script>
 </body>
 </html>
-""")
+"""
+    return HTMLResponse(content=html_content, status_code=200)
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "api:app",
+        host="0.0.0.0",
+        port=5000,
+        log_level="info",
+        reload=False  # Disable reload in production
+    )

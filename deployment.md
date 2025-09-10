@@ -1,52 +1,54 @@
-# Руководство по развертыванию приложения поиска дубликатов в логах
+# Deployment Guide for Duplicate Log Finder Application
 
-## Подготовка к развертыванию
+## Preparing for Deployment
 
-### 1. Подготовка репозитория
+### 1. Repository Preparation
 
-Перед развертыванием убедитесь, что все изменения закоммичены:
+Before deployment, ensure all changes are committed:
 
 ```bash
-# Проверьте статус репозитория
+# Check repository status
 git status
 
-# Добавьте все изменения
+# Add all changes
 git add .
 
-# Создайте коммит
-git commit -m "Подготовка к развертыванию на сервере"
+# Create commit
+git commit -m "Preparing for server deployment"
 
-# Отправьте изменения в удаленный репозиторий
+# Push changes to remote repository
 git push origin master
 ```
 
-### 2. Структура проекта для развертывания
+### 2. Project Structure for Deployment
 
-Проект уже имеет правильную структуру:
-- `api.py` - основной файл для запуска REST API
-- `controller.py` - для запуска CLI версии
-- `model.py` - бизнес-логика
-- `view.py` - отображение результатов
-- `requirements.txt` - зависимости
-- `res/` - примеры данных
+The project already has the correct structure:
+- `api.py` - main file for running REST API
+- `controller.py` - for running CLI version
+- `model.py` - business logic
+- `view.py` - result display
+- `requirements.txt` - dependencies
+- `res/` - sample data
 
-### 3. Зависимости
+### 3. Dependencies
 
-Убедитесь, что в requirements.txt указаны только необходимые зависимости:
+Ensure requirements.txt contains only necessary dependencies:
 ```
-flask
+fastapi
+uvicorn[standard]
+python-multipart
 ```
 
-## Развертывание на сервере
+## Server Deployment
 
-### Вариант 1: Развертывание как systemd сервис (Linux)
+### Option 1: Deploy as systemd service (Linux)
 
-1. Скопируйте проект на сервер:
+1. Copy project to server:
 ```bash
 scp -r . user@server:/path/to/deployment/
 ```
 
-2. Создайте виртуальное окружение и установите зависимости:
+2. Create virtual environment and install dependencies:
 ```bash
 cd /path/to/deployment/
 python3 -m venv venv
@@ -54,7 +56,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. Создайте systemd unit файл `/etc/systemd/system/duplicate-finder.service`:
+3. Create systemd unit file `/etc/systemd/system/duplicate-finder.service`:
 ```ini
 [Unit]
 Description=Duplicate Log Finder API
@@ -72,34 +74,26 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-4. Запустите сервис:
+4. Start the service:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl start duplicate-finder
 sudo systemctl enable duplicate-finder
 ```
 
-### Вариант 2: Использование Gunicorn (рекомендуется для production)
+### Option 2: Using Uvicorn (recommended for production)
 
-1. Установите Gunicorn:
+1. Install dependencies (already installed via requirements.txt):
 ```bash
-pip install gunicorn
+pip install fastapi uvicorn[standard]
 ```
 
-2. Создайте файл `wsgi.py`:
-```python
-from api import app
-
-if __name__ == "__main__":
-    app.run()
-```
-
-3. Запустите приложение через Gunicorn:
+2. Run application through Uvicorn:
 ```bash
-gunicorn --bind 0.0.0.0:5000 wsgi:app
+uvicorn api:app --host 0.0.0.0 --port 5000
 ```
 
-4. Для запуска как сервис создайте systemd unit файл:
+3. To run as service, create systemd unit file:
 ```ini
 [Unit]
 Description=Duplicate Log Finder API
@@ -109,7 +103,7 @@ After=network.target
 User=www-data
 Group=www-data
 WorkingDirectory=/path/to/deployment
-ExecStart=/path/to/deployment/venv/bin/gunicorn --bind 0.0.0.0:5000 wsgi:app
+ExecStart=/path/to/deployment/venv/bin/uvicorn api:app --host 0.0.0.0 --port 5000
 Environment=PATH=/path/to/deployment/venv/bin
 Restart=always
 
@@ -117,50 +111,16 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-### Вариант 3: Использование Docker
+## Reverse Proxy Setup (nginx)
 
-1. Создайте Dockerfile:
-```dockerfile
-FROM python:3.9-slim
+For production, it's recommended to use nginx as reverse proxy:
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-
-EXPOSE 5000
-
-CMD ["python", "api.py"]
-```
-
-2. Создайте docker-compose.yml:
-```yaml
-version: '3.8'
-services:
-  duplicate-finder:
-    build: .
-    ports:
-      - "5000:5000"
-    restart: always
-```
-
-3. Запустите приложение:
-```bash
-docker-compose up -d
-```
-
-## Настройка reverse proxy (nginx)
-
-Для production рекомендуется использовать nginx как reverse proxy:
-
-1. Установите nginx:
+1. Install nginx:
 ```bash
 sudo apt install nginx
 ```
 
-2. Создайте конфигурационный файл `/etc/nginx/sites-available/duplicate-finder`:
+2. Create configuration file `/etc/nginx/sites-available/duplicate-finder`:
 ```nginx
 server {
     listen 80;
@@ -175,72 +135,72 @@ server {
 }
 ```
 
-3. Активируйте сайт:
+3. Activate site:
 ```bash
 sudo ln -s /etc/nginx/sites-available/duplicate-finder /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## Мониторинг и логирование
+## Monitoring and Logging
 
-1. Проверка статуса сервиса:
+1. Check service status:
 ```bash
 systemctl status duplicate-finder
 ```
 
-2. Просмотр логов:
+2. View logs:
 ```bash
 journalctl -u duplicate-finder -f
 ```
 
-3. Логи приложения находятся в `/var/log/duplicate-finder/`
+3. Application logs are located in `/var/log/duplicate-finder/`
 
-## Обновление приложения
+## Application Updates
 
-1. Остановите сервис:
+1. Stop service:
 ```bash
 sudo systemctl stop duplicate-finder
 ```
 
-2. Обновите код:
+2. Update code:
 ```bash
 cd /path/to/deployment
 git pull origin master
 ```
 
-3. Обновите зависимости при необходимости:
+3. Update dependencies if needed:
 ```bash
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Перезапустите сервис:
+4. Restart service:
 ```bash
 sudo systemctl start duplicate-finder
 ```
 
-## Безопасность
+## Security
 
-1. Используйте HTTPS (Let's Encrypt):
+1. Use HTTPS (Let's Encrypt):
 ```bash
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.com
 ```
 
-2. Ограничьте доступ к API при необходимости через nginx:
+2. Restrict API access if needed through nginx:
 ```nginx
 location / {
     allow 192.168.1.0/24;
     deny all;
     proxy_pass http://127.0.0.1:5000;
-    # ... остальные настройки
+    # ... other settings
 }
 ```
 
-## Резервное копирование
+## Backup
 
-Регулярно создавайте резервные копии:
+Regularly create backups:
 ```bash
 tar -czf backup-$(date +%Y%m%d).tar.gz /path/to/deployment/
 ```

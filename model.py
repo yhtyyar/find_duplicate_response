@@ -1,82 +1,85 @@
-"""Модель данных для обработки CSV файлов и поиска дубликатов."""
+"""Data model for processing CSV files and finding duplicates."""
 
 import csv
 import urllib.parse
-from typing import List, Dict, Any, TextIO, Tuple
+from typing import List, Dict, Any, TextIO, Set
+from collections import defaultdict
+
+
+# Required fields for CSV processing
+REQUIRED_FIELDS: Set[str] = {'URL', 'Method', 'Response Code', 'Status'}
 
 
 def read_csv(file_path: str, skip_header: bool = True) -> List[Dict[str, Any]]:
     """
-    Чтение CSV файла и возврат списка строк в виде словарей.
+    Read CSV file and return list of rows as dictionaries.
     
-    Аргументы:
-        file_path: Путь к CSV файлу
-        skip_header: Пропустить ли строку заголовка
+    Args:
+        file_path (str): Path to CSV file
+        skip_header (bool): Whether to skip header row
         
-    Возвращает:
-        Список словарей строк
+    Returns:
+        List[Dict[str, Any]]: List of row dictionaries
         
-    Выбрасывает:
-        ValueError: Если чтение файла не удалось или отсутствуют обязательные поля
+    Raises:
+        ValueError: If file reading fails or required fields are missing
+        FileNotFoundError: If file doesn't exist
     """
-    required_fields = ['URL', 'Method', 'Response Code', 'Status']
-    
     try:
         with open(file_path, 'r', newline='', encoding='utf-8') as file:
-            return _read_csv_file(file, skip_header, required_fields)
+            return _read_csv_file(file, skip_header, REQUIRED_FIELDS)
     except FileNotFoundError:
-        raise ValueError(f"Файл не найден: {file_path}")
+        raise ValueError(f"File not found: {file_path}")
     except Exception as e:
-        raise ValueError(f"Ошибка чтения файла: {str(e)}")
+        raise ValueError(f"Error reading file: {str(e)}")
 
 
 def read_csv_from_string(file_buffer: TextIO, skip_header: bool = True) -> List[Dict[str, Any]]:
     """
-    Чтение CSV данных из строкового буфера и возврат списка строк в виде словарей.
+    Read CSV data from string buffer and return list of rows as dictionaries.
     
-    Аргументы:
-        file_buffer: Строковый буфер с CSV данными
-        skip_header: Пропустить ли строку заголовка
+    Args:
+        file_buffer (TextIO): String buffer with CSV data
+        skip_header (bool): Whether to skip header row
         
-    Возвращает:
-        Список словарей строк
+    Returns:
+        List[Dict[str, Any]]: List of row dictionaries
         
-    Выбрасывает:
-        ValueError: Если чтение файла не удалось или отсутствуют обязательные поля
+    Raises:
+        ValueError: If file reading fails or required fields are missing
     """
-    required_fields = ['URL', 'Method', 'Response Code', 'Status']
-    return _read_csv_file(file_buffer, skip_header, required_fields)
+    return _read_csv_file(file_buffer, skip_header, REQUIRED_FIELDS)
 
 
-def _read_csv_file(file_obj: TextIO, skip_header: bool, required_fields: List[str]) -> List[Dict[str, Any]]:
+def _read_csv_file(file_obj: TextIO, skip_header: bool, required_fields: Set[str]) -> List[Dict[str, Any]]:
     """
-    Внутренняя функция для чтения CSV из объекта файла.
+    Internal function to read CSV from file object.
     
-    Аргументы:
-        file_obj: Объект файла для чтения
-        skip_header: Пропустить ли строку заголовка
-        required_fields: Список обязательных полей
+    Args:
+        file_obj (TextIO): File object to read from
+        skip_header (bool): Whether to skip header row
+        required_fields (Set[str]): Set of required fields
         
-    Возвращает:
-        Список словарей строк
+    Returns:
+        List[Dict[str, Any]]: List of row dictionaries
     """
     csv_reader = csv.DictReader(file_obj)
     
-    # Пропустить заголовок, если требуется
+    # Skip header if required
     if skip_header:
         try:
             next(csv_reader)
         except StopIteration:
-            return []  # Пустой файл
+            return []  # Empty file
 
-    rows = []
+    rows: List[Dict[str, Any]] = []
     for idx, row in enumerate(csv_reader, 1):
         if not row:
             continue
             
-        # Проверка наличия обязательных полей
+        # Check for required fields
         if not all(field in row for field in required_fields):
-            raise ValueError(f"Строка {idx}: Отсутствуют обязательные поля")
+            raise ValueError(f"Row {idx}: Missing required fields")
             
         rows.append(row)
         
@@ -85,27 +88,27 @@ def _read_csv_file(file_obj: TextIO, skip_header: bool, required_fields: List[st
 
 def _normalize_url_for_comparison(url: str) -> str:
     """
-    Нормализация URL для сравнения, включая упорядочение query-параметров.
+    Normalize URL for comparison, including ordering query parameters.
     
-    Аргументы:
-        url: URL для нормализации
+    Args:
+        url (str): URL to normalize
         
-    Возвращает:
-        Нормализованный URL с упорядоченными query-параметрами
+    Returns:
+        str: Normalized URL with ordered query parameters
     """
     try:
-        # Разбираем URL на компоненты
+        # Parse URL into components
         parsed = urllib.parse.urlparse(url)
         
-        # Если есть query-параметры, сортируем их для консистентного сравнения
+        # If there are query parameters, sort them for consistent comparison
         if parsed.query:
-            # Парсим query-параметры
+            # Parse query parameters
             query_params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-            # Сортируем параметры по ключу
+            # Sort parameters by key
             sorted_params = sorted(query_params.items())
-            # Формируем отсортированную query-строку
+            # Form sorted query string
             normalized_query = urllib.parse.urlencode(sorted_params, doseq=True)
-            # Собираем нормализованный URL
+            # Build normalized URL
             normalized_url = urllib.parse.urlunparse((
                 parsed.scheme,
                 parsed.netloc,
@@ -116,27 +119,27 @@ def _normalize_url_for_comparison(url: str) -> str:
             ))
             return normalized_url
         else:
-            # Если нет query-параметров, возвращаем оригинальный URL
+            # If no query parameters, return original URL
             return url
     except Exception:
-        # В случае ошибки возвращаем оригинальный URL
+        # In case of error, return original URL
         return url
 
 
 def _create_comparison_key(row: Dict[str, Any]) -> str:
     """
-    Создание ключа для сравнения записей.
+    Create key for comparing records.
     
-    Аргументы:
-        row: Словарь с данными строки
+    Args:
+        row (Dict[str, Any]): Dictionary with row data
         
-    Возвращает:
-        Ключ для сравнения записей
+    Returns:
+        str: Key for comparing records
     """
-    # Нормализуем URL для точного сравнения с учетом query-параметров
+    # Normalize URL for exact comparison with query parameters
     normalized_url = _normalize_url_for_comparison(row['URL'])
     
-    # Создаем ключ из всех критических полей
+    # Create key from all critical fields
     key_parts = [
         normalized_url,
         str(row['Method']),
@@ -149,43 +152,43 @@ def _create_comparison_key(row: Dict[str, Any]) -> str:
 
 def find_duplicates(rows: List[Dict[str, Any]]) -> Dict[str, int]:
     """
-    Поиск дублирующихся записей на основе URL, метода, кода ответа и статуса.
-    При сравнении URL учитываются query-параметры с нормализацией.
+    Find duplicate records based on URL, method, response code, and status.
+    When comparing URLs, query parameters are considered with normalization.
     
-    Аргументы:
-        rows: Список словарей строк
+    Args:
+        rows (List[Dict[str, Any]]): List of row dictionaries
         
-    Возвращает:
-        Словарь с ключами дубликатов и их количеством
+    Returns:
+        Dict[str, int]: Dictionary with duplicate keys and their counts
     """
-    count = {}
+    count: Dict[str, int] = defaultdict(int)
     
     for row in rows:
-        # Создаем нормализованный ключ для сравнения
+        # Create normalized key for comparison
         key = _create_comparison_key(row)
-        count[key] = count.get(key, 0) + 1
+        count[key] += 1
         
     return {k: v for k, v in count.items() if v > 1}
 
 
 def get_stats(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
     """
-    Получение статистики по кодам ответов и методам.
+    Get statistics on response codes and methods.
     
-    Аргументы:
-        rows: Список словарей строк
+    Args:
+        rows (List[Dict[str, Any]]): List of row dictionaries
         
-    Возвращает:
-        Словарь с количеством кодов и методов
+    Returns:
+        Dict[str, Dict[str, int]]: Dictionary with counts of codes and methods
     """
-    code_counts = {}
-    method_counts = {}
+    code_counts: Dict[str, int] = defaultdict(int)
+    method_counts: Dict[str, int] = defaultdict(int)
     
     for row in rows:
-        code = row.get('Response Code', 'Нет кода')
-        method = row.get('Method', 'Нет метода')
+        code = row.get('Response Code', 'No code')
+        method = row.get('Method', 'No method')
         
-        code_counts[code] = code_counts.get(code, 0) + 1
-        method_counts[method] = method_counts.get(method, 0) + 1
+        code_counts[code] += 1
+        method_counts[method] += 1
         
-    return {'codes': code_counts, 'methods': method_counts}
+    return {'codes': dict(code_counts), 'methods': dict(method_counts)}

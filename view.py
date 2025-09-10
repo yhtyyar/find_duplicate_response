@@ -1,65 +1,67 @@
-"""Модуль отображения результатов в консоли."""
+"""Module for displaying results in console."""
+
+from typing import Dict, Any, List
 
 
-def print_results(total: int, duplicates_count: int, duplicates: dict, stats: dict) -> None:
+def print_results(total: int, duplicates_count: int, duplicates: Dict[str, List[Dict[str, Any]]], stats: Dict[str, Dict[str, int]]) -> None:
     """
-    Вывод результатов обработки, включая дубликаты.
+    Print processing results, including duplicates.
     
-    Аргументы:
-        total: Общее количество обработанных строк
-        duplicates_count: Количество найденных дубликатов
-        duplicates: Словарь с дублирующимися записями
-        stats: Словарь со статистикой
+    Args:
+        total (int): Total number of processed rows
+        duplicates_count (int): Number of duplicates found
+        duplicates (Dict[str, List[Dict[str, Any]]]): Dictionary with duplicate entries
+        stats (Dict[str, Dict[str, int]]): Dictionary with statistics
     """
-    # Цвета для светлого фона для лучшей читаемости
-    сброс = '\033[0m'
-    общий_цвет = '\033[92m' if duplicates_count == 0 else '\033[91m'  # Зеленый или красный
+    # Colors for light background for better readability
+    reset = '\033[0m'
+    overall_color = '\033[92m' if duplicates_count == 0 else '\033[91m'  # Green or red
 
-    # Светлые цвета для дубликатов (мягкие оттенки для светлого фона)
-    цвета = [
-        '\033[94m',   # Светло-синий
-        '\033[92m',   # Светло-зеленый
-        '\033[93m',   # Светло-желтый
-        '\033[95m',   # Светло-пурпурный
-        '\033[96m',   # Светло-голубой
-        '\033[91m',   # Светло-красный
-        '\033[90m',   # Темно-серый (все еще видим на светлом фоне)
-        '\033[37m'    # Белый
+    # Light colors for duplicates (soft shades for light background)
+    colors = [
+        '\033[94m',   # Light blue
+        '\033[92m',   # Light green
+        '\033[93m',   # Light yellow
+        '\033[95m',   # Light purple
+        '\033[96m',   # Light cyan
+        '\033[91m',   # Light red
+        '\033[90m',   # Dark gray (still visible on light background)
+        '\033[37m'    # White
     ]
     
-    # Специальные цвета для кодов ошибок
-    ошибка_4xx_цвет = '\033[91m'  # Светло-красный для ошибок 4xx
-    ошибка_5xx_цвет = '\033[95m'  # Светло-пурпурный для ошибок 5xx
+    # Special colors for error codes
+    error_4xx_color = '\033[91m'  # Light red for 4xx errors
+    error_5xx_color = '\033[95m'  # Light purple for 5xx errors
 
-    print(f"\n{общий_цвет}Статистика обработки:{сброс}")
-    print(f"Обработано строк: {total}")
-    print(f"Найдено дубликатов: {duplicates_count}")
+    print(f"\n{overall_color}Processing statistics:{reset}")
+    print(f"Processed rows: {total}")
+    print(f"Duplicates found: {duplicates_count}")
 
     if duplicates:
-        print(f"\n{общий_цвет}Дублирующиеся строки:{сброс}")
-        print(f"{'Код ответа':<15} | {'Время начала':<25} | {'Метод':<7} | {'URL':<150} |")
+        print(f"\n{overall_color}Duplicate rows:{reset}")
+        print(f"{'Response code':<15} | {'Start time':<25} | {'Method':<7} | {'URL':<150} |")
 
-        группы = list(duplicates.keys())
-        for индекс_группы, ключ in enumerate(группы):
-            цвет = цвета[индекс_группы % len(цвета)]
-            for строка in duplicates[ключ]:
-                # Применяем специальную раскраску для кодов ошибок
-                код = строка['Response Code']
-                if код.startswith('4') or код.startswith('5'):
-                    if код.startswith('4'):
-                        цвет = ошибка_4xx_цвет
-                    elif код.startswith('5'):
-                        цвет = ошибка_5xx_цвет
+        groups = list(duplicates.keys())
+        for group_index, key in enumerate(groups):
+            color = colors[group_index % len(colors)]
+            for row in duplicates[key]:
+                # Apply special coloring for error codes
+                code = row['Response Code']
+                if code.startswith('4') or code.startswith('5'):
+                    if code.startswith('4'):
+                        color = error_4xx_color
+                    elif code.startswith('5'):
+                        color = error_5xx_color
                 
-                # Применяем цвет к строке
-                print(f"{цвет}"
-                      f"{строка['Response Code']:<15} | "
-                      f"{строка['Request Start Time'][:25]:<25} | "
-                      f"{строка['Method']:<7} | "
-                      f"{строка['URL']:<150} | "
-                      f"{сброс}")
+                # Apply color to row
+                print(f"{color}"
+                      f"{row['Response Code']:<15} | "
+                      f"{row.get('Request Start Time', '')[:25]:<25} | "
+                      f"{row['Method']:<7} | "
+                      f"{row['URL']:<150} | "
+                      f"{reset}")
 
 
 def print_no_duplicates() -> None:
-    """Вывод сообщения о том, что дубликаты не найдены."""
-    print("\033[92mДубликаты не найдены\033[0m")
+    """Print message that no duplicates were found."""
+    print("\033[92mNo duplicates found\033[0m")

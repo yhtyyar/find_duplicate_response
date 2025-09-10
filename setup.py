@@ -1,3 +1,5 @@
+"""Setup configuration for the duplicate log finder application."""
+
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -11,7 +13,7 @@ setup(
     version="1.0.0",
     author="Your Name",
     author_email="your.email@example.com",
-    description="Приложение для поиска дубликатов в логах HTTP запросов",
+    description="Application for finding duplicates in HTTP request logs",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/duplicate-log-finder",
